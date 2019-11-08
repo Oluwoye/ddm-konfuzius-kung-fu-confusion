@@ -31,6 +31,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private static final long serialVersionUID = 2940665245810221108L;
 		private T message;
 		private ActorRef receiver;
+
+		public ActorRef getReceiver() {
+			return receiver;
+		}
+
+		public T getMessage() {
+			return message;
+		}
 	}
 
 	@Data @NoArgsConstructor @AllArgsConstructor
@@ -39,6 +47,21 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private T bytes;
 		private ActorRef sender;
 		private ActorRef receiver;
+
+		public BytesMessage(T message, T sender, T receiver) {
+		}
+
+		public T getBytes(){
+			return bytes;
+		}
+
+		public ActorRef getSender(){
+			return sender;
+		}
+
+		public ActorRef getReceiver(){
+			return receiver;
+		}
 	}
 	
 	/////////////////
