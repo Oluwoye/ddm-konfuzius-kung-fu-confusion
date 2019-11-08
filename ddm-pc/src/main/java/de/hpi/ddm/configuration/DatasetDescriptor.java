@@ -81,4 +81,48 @@ public class DatasetDescriptor implements Serializable {
 		
 		return reader;
 	}
+
+    public String getDatasetName() {
+		return datasetName;
+    }
+
+	public String getDatasetPath() {
+		return datasetPath;
+	}
+
+	public String getDatasetEnding() {
+		return datasetEnding;
+	}
+
+	public boolean isFileHasHeader() {
+		return fileHasHeader;
+	}
+
+	public Charset getCharset() {
+		return charset;
+	}
+
+	public char getValueSeparator() {
+		return valueSeparator;
+	}
+
+	public char getValueQuote() {
+		return valueQuote;
+	}
+
+	public char getValueEscape() {
+		return valueEscape;
+	}
+
+	public boolean isValueStrictQuotes() {
+		return valueStrictQuotes;
+	}
+
+	public boolean isValueIgnoreLeadingWhitespace() {
+		return valueIgnoreLeadingWhitespace;
+	}
+
+	public boolean isReaderSkipDifferingLines() {
+		return readerSkipDifferingLines;
+	}
 }
