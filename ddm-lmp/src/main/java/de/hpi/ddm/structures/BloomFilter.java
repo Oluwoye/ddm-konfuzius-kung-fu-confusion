@@ -1,11 +1,13 @@
 package de.hpi.ddm.structures;
 
+import java.io.Serializable;
 import java.util.List;
 
 import de.hpi.ddm.configuration.ConfigurationSingleton;
 
-public class BloomFilter {
+public class BloomFilter implements Serializable {
 
+	private static final long serialVersionUID = 3981258361682959287L;
 	public static int DEFAULT_SIZE = 8 * 1024 * 1024 * ConfigurationSingleton.get().getDataSize();
 	
 	private final BitSet bits;
@@ -61,7 +63,7 @@ public class BloomFilter {
 	
 	/**
 	 * Adds all the elements to the BloomFilter.
-	 * @param element the element to be added
+	 * @param elements the element to be added
 	 * @return true if the element was added; false if it existed already
 	 */
 	public void addAll(List<BitSet> elements) {

@@ -1,6 +1,6 @@
 package de.hpi.ddm.actors;
 
-import java.io.Serializable;
+import java.io.*;
 
 import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
@@ -32,6 +32,12 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private T message;
 		private ActorRef receiver;
 
+		public LargeMessage(T data, T sender) {
+			this.message = data;
+			this.receiver = (ActorRef) sender;
+		}
+
+
 		public ActorRef getReceiver() {
 			return receiver;
 		}
@@ -47,8 +53,11 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private T bytes;
 		private ActorRef sender;
 		private ActorRef receiver;
+		private int sessionID = -1;
+		private boolean hasNext = false;
 
-		public BytesMessage(T message, T sender, T receiver) {
+		public BytesMessage(T message, T sender, T receiver, int i, boolean b) {
+
 		}
 
 		public T getBytes(){
@@ -61,6 +70,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 
 		public ActorRef getReceiver(){
 			return receiver;
+		}
+
+		public boolean hasNext(){
+			return hasNext;
+		}
+
+		public int getSessionID() {
+			return sessionID;
 		}
 	}
 	
@@ -95,7 +112,36 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// 2. Serialize the object and send its bytes via Akka streaming.
 		// 3. Send the object via Akka's http client-server component.
 		// 4. Other ideas ...
-		receiverProxy.tell(new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver()), this.self());
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		ObjectOutput out = null;
+		//BytesMessage<?> byteMessage = new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver());
+		//System.out.println(byteMessage.getBytes());
+		byte[] yourBytes = null;
+
+		try {
+			out = new ObjectOutputStream(bos);
+			out.writeObject(message.getMessage());
+			out.flush();
+			yourBytes = bos.toByteArray();
+			System.out.println(yourBytes);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				bos.close();
+			} catch (IOException ex) {
+				// ignore close exception
+			}
+		}
+
+		for(int i=0; i<yourBytes.length; i++){
+			if(i != yourBytes.length - 1){
+				receiverProxy.tell(new BytesMessage<>(yourBytes[i], this.sender(), message.getReceiver(), i, true), this.self());
+			} else {
+				receiverProxy.tell(new BytesMessage<>(yourBytes[i], this.sender(), message.getReceiver(), i, false), this.self());
+			}
+
+		}
 	}
 
 	private void handle(BytesMessage<?> message) {
