@@ -1,6 +1,7 @@
 package de.hpi.ddm.actors;
 
 import java.io.*;
+import java.util.*;
 
 import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
@@ -11,6 +12,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 public class LargeMessageProxy extends AbstractLoggingActor {
+
+	private int messageSession = 0;
+	private int currentSession = -1;
+	private SortedMap<Integer,BytesMessage<?>> messageMap = new TreeMap<Integer, BytesMessage<?>>();
 
 	////////////////////////
 	// Actor Construction //
@@ -54,9 +59,10 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private ActorRef sender;
 		private ActorRef receiver;
 		private int sessionID = -1;
+		private int messageID = -1;
 		private boolean hasNext = false;
 
-		public BytesMessage(T message, T sender, T receiver, int i, boolean b) {
+		public BytesMessage(T message, T sender, T receiver, int i, int j, boolean b) {
 
 		}
 
@@ -78,6 +84,10 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 
 		public int getSessionID() {
 			return sessionID;
+		}
+
+		public int getMessageID() {
+			return messageID;
 		}
 	}
 	
@@ -112,6 +122,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// 2. Serialize the object and send its bytes via Akka streaming.
 		// 3. Send the object via Akka's http client-server component.
 		// 4. Other ideas ...
+		int batchSize = 10;
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		ObjectOutput out = null;
 		//BytesMessage<?> byteMessage = new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver());
@@ -123,7 +134,6 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 			out.writeObject(message.getMessage());
 			out.flush();
 			yourBytes = bos.toByteArray();
-			System.out.println(yourBytes);
 		} catch (IOException e) {
 			e.printStackTrace();
 		} finally {
@@ -134,18 +144,71 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 			}
 		}
 
-		for(int i=0; i<yourBytes.length; i++){
-			if(i != yourBytes.length - 1){
-				receiverProxy.tell(new BytesMessage<>(yourBytes[i], this.sender(), message.getReceiver(), i, true), this.self());
+		for(int i=0; i<yourBytes.length; i += batchSize){
+			byte[] byteBatch = Arrays.copyOfRange(yourBytes, i, Math.min(i+batchSize, yourBytes.length));
+			if(i+batchSize < yourBytes.length){
+				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
+						messageSession, true), this.self());
 			} else {
-				receiverProxy.tell(new BytesMessage<>(yourBytes[i], this.sender(), message.getReceiver(), i, false), this.self());
+				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
+						messageSession, false), this.self());
 			}
 
 		}
+
+		messageSession++;
 	}
 
 	private void handle(BytesMessage<?> message) {
+		//TODO: Größere Messages, check if complete, ordering
 		// Reassemble the message content, deserialize it and/or load the content from some local location before forwarding its content.
-		message.getReceiver().tell(message.getBytes(), message.getSender());
+
+		if(currentSession == -1){
+			currentSession = message.getMessageID();
+		}
+		if(message.getMessageID() != currentSession){
+			return;
+		} else {
+			messageMap.put(message.getSessionID(), message);
+			if(messageComplete(messageMap)){
+				byte[] bytes = recreateMessage(messageMap);
+				message.getReceiver().tell(bytes, message.getSender());
+				currentSession = -1;
+			}
+		}
+	}
+
+	private byte[] recreateMessage(SortedMap<Integer, BytesMessage<?>> messageMap) {
+		Set<Integer> keys = messageMap.keySet();
+		List<Byte> byteList = new ArrayList<>();
+		for(Integer key : keys){
+			byte[] hey = (byte[]) messageMap.get(key).getBytes();
+			for(int i=0; i<hey.length; i++){
+				byteList.add(hey[i]);
+			}
+		}
+		byte[] res = new byte[byteList.size()];
+		for(int i=0; i<byteList.size(); i++){
+			res[i] = (byte) byteList.get(i);
+		}
+		return res;
+	}
+
+	private boolean messageComplete(SortedMap<Integer, BytesMessage<?>> messageMap) {
+		if(messageMap.firstKey() != 0){
+			return false;
+		}
+		if(messageMap.get(messageMap.lastKey()).hasNext){
+			return false;
+		}
+		Set<Integer> keys = messageMap.keySet();
+		int currentValue = 0;
+		for(Integer key : keys){
+			if(key != currentValue){
+				return false;
+			}
+			currentValue++;
+		}
+		return true;
 	}
 }
