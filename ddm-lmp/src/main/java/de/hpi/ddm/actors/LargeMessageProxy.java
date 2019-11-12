@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 
 public class LargeMessageProxy extends AbstractLoggingActor {
 
-	private int messageSession = 0;
+	private int messageSession = (new Random()).nextInt();
 	private int currentSession = -1;
 	private SortedMap<Integer,BytesMessage<?>> messageMap = new TreeMap<Integer, BytesMessage<?>>();
 
