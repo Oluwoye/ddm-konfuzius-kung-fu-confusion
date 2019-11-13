@@ -7,6 +7,9 @@ import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
 import akka.actor.ActorSelection;
 import akka.actor.Props;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -37,10 +40,10 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private T message;
 		private ActorRef receiver;
 
-		public LargeMessage(T data, T sender) {
+		/*public LargeMessage(T data, T sender) {
 			this.message = data;
 			this.receiver = (ActorRef) sender;
-		}
+		}*/
 
 
 		public ActorRef getReceiver() {
@@ -62,9 +65,14 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		private int messageID = -1;
 		private boolean hasNext = false;
 
-		public BytesMessage(T message, T sender, T receiver, int i, int j, boolean b) {
-
-		}
+		/*public BytesMessage(T message, T sender, T receiver, int i, int j, boolean b) {
+            bytes = message;
+            this.sender = (ActorRef) sender;
+            this.receiver = (ActorRef) receiver;
+            this.sessionID = i;
+            this.messageID = j;
+            this.hasNext = b;
+		}*/
 
 		public T getBytes(){
 			return bytes;
@@ -122,7 +130,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// 2. Serialize the object and send its bytes via Akka streaming.
 		// 3. Send the object via Akka's http client-server component.
 		// 4. Other ideas ...
-		int batchSize = 10;
+		int batchSize = 10000;
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		ObjectOutput out = null;
 		//BytesMessage<?> byteMessage = new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver());
@@ -146,10 +154,23 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 
 		for(int i=0; i<yourBytes.length; i += batchSize){
 			byte[] byteBatch = Arrays.copyOfRange(yourBytes, i, Math.min(i+batchSize, yourBytes.length));
+            
 			if(i+batchSize < yourBytes.length){
+                try {
+                    /* In oreder to be reliable over weak Wifi so the channel will not be overloaded */
+                    TimeUnit.MILLISECONDS.sleep(5);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(LargeMessageProxy.class.getName()).log(Level.SEVERE, null, ex);
+                }
 				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
 						messageSession, true), this.self());
 			} else {
+                try {
+                    /* In oreder to be reliable over weak Wifi so the channel will not be overloaded */
+                    TimeUnit.MILLISECONDS.sleep(5);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(LargeMessageProxy.class.getName()).log(Level.SEVERE, null, ex);
+                }
 				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
 						messageSession, false), this.self());
 			}
@@ -172,7 +193,18 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 			messageMap.put(message.getSessionID(), message);
 			if(messageComplete(messageMap)){
 				byte[] bytes = recreateMessage(messageMap);
-				message.getReceiver().tell(bytes, message.getSender());
+                
+                ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+                ObjectInput in;
+                Object obj;
+                try {
+                    in = new ObjectInputStream(bis);
+                    obj = in.readObject();
+                    message.getReceiver().tell(obj, message.getSender());
+                } catch (IOException | ClassNotFoundException ex) {
+                    Logger.getLogger(LargeMessageProxy.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                
 				currentSession = -1;
 			}
 		}
