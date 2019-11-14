@@ -1,7 +1,9 @@
 package de.hpi.ddm.actors;
 
 import java.io.*;
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
@@ -122,7 +124,7 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		// 2. Serialize the object and send its bytes via Akka streaming.
 		// 3. Send the object via Akka's http client-server component.
 		// 4. Other ideas ...
-		int batchSize = 10;
+		int batchSize = 10000;
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		ObjectOutput out = null;
 		//BytesMessage<?> byteMessage = new BytesMessage<>(message.getMessage(), this.sender(), message.getReceiver());
@@ -147,10 +149,32 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		for(int i=0; i<yourBytes.length; i += batchSize){
 			byte[] byteBatch = Arrays.copyOfRange(yourBytes, i, Math.min(i+batchSize, yourBytes.length));
 			if(i+batchSize < yourBytes.length){
-				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
-						messageSession, true), this.self());
+				/*try {
+					TimeUnit.MILLISECONDS.sleep(5);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}*/
+				LargeMessageProxy myself = this;
+				int currentIteration = i;
+
+				this.getContext().getSystem().scheduler().scheduleOnce(Duration.ofMillis(0),
+						new Runnable() {
+							@Override
+							public void run(){
+								receiverProxy.tell(new BytesMessage<>(byteBatch, myself.sender(), message.getReceiver(), currentIteration/batchSize,
+										messageSession, true), myself.self());
+							}
+						},
+						this.getContext().getSystem().dispatcher());
+				//receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
+				//		messageSession, true), this.self());
 			} else {
-				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i/batchSize,
+				try {
+					TimeUnit.MILLISECONDS.sleep(500);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				receiverProxy.tell(new BytesMessage<>(byteBatch, this.sender(), message.getReceiver(), i / batchSize,
 						messageSession, false), this.self());
 			}
 
@@ -163,6 +187,8 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 		//TODO: Größere Messages, check if complete, ordering
 		// Reassemble the message content, deserialize it and/or load the content from some local location before forwarding its content.
 
+		//System.out.println(message.getReceiver());
+		//System.out.println(message.getSender());
 		if(currentSession == -1){
 			currentSession = message.getMessageID();
 		}
@@ -172,6 +198,8 @@ public class LargeMessageProxy extends AbstractLoggingActor {
 			messageMap.put(message.getSessionID(), message);
 			if(messageComplete(messageMap)){
 				byte[] bytes = recreateMessage(messageMap);
+				//System.out.println(message.getReceiver());
+				//System.out.println(message.getSender());
 				message.getReceiver().tell(bytes, message.getSender());
 				currentSession = -1;
 			}
