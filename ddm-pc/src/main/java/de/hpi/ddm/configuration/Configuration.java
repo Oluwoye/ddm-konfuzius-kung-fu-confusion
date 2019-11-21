@@ -48,36 +48,4 @@ public class Configuration {
 		this.masterPort = commandSlave.masterport;
 		this.numWorkers = commandSlave.numWorkers;
 	}
-
-    public String getHost() {
-		return host;
-    }
-
-	public int getPort() {
-		return port;
-	}
-
-	public String getActorSystemName() {
-		return actorSystemName;
-	}
-
-	public int getNumWorkers() {
-		return numWorkers;
-	}
-
-	public boolean isStartPaused() {
-		return startPaused;
-	}
-
-	public String getMasterHost() {
-		return masterHost;
-	}
-
-	public int getMasterPort() {
-		return masterPort;
-	}
-
-	public int getBufferSize() {
-		return bufferSize;
-	}
 }

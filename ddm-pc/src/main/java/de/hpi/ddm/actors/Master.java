@@ -3,7 +3,6 @@ package de.hpi.ddm.actors;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 
 import akka.actor.AbstractLoggingActor;
@@ -11,6 +10,7 @@ import akka.actor.ActorRef;
 import akka.actor.PoisonPill;
 import akka.actor.Props;
 import akka.actor.Terminated;
+import java.util.LinkedList;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -46,16 +46,20 @@ public class Master extends AbstractLoggingActor {
 	public static class BatchMessage implements Serializable {
 		private static final long serialVersionUID = 8343040942748609598L;
 		private List<String[]> lines;
-
-		public List<String[]> getLines() {
-			return lines;
-		}
 	}
 
 	@Data
 	public static class RegistrationMessage implements Serializable {
 		private static final long serialVersionUID = 3303081601659723997L;
 	}
+    
+    @Data @NoArgsConstructor @AllArgsConstructor
+    public static class WorkMessage implements Serializable {
+		private static final long serialVersionUID = 3303081603964723997L;
+        
+        private long start;
+        private long end;
+    }
 	
 	/////////////////
 	// Actor State //
@@ -64,8 +68,20 @@ public class Master extends AbstractLoggingActor {
 	private final ActorRef reader;
 	private final ActorRef collector;
 	private final List<ActorRef> workers;
+    
+    private long permutationIndex = 0;
 
+    boolean workBeeingDone = false;
+    
 	private long startTime;
+    
+     @AllArgsConstructor
+    class HashToCrack {
+        String hash;
+        int row, hintIndex;
+    }
+    
+    private ArrayList<HashToCrack> hashsToCrack = new ArrayList<>();
 	
 	/////////////////////
 	// Actor Lifecycle //
@@ -80,6 +96,8 @@ public class Master extends AbstractLoggingActor {
 	// Actor Behavior //
 	////////////////////
 
+    
+    
 	@Override
 	public Receive createReceive() {
 		return receiveBuilder()
@@ -96,27 +114,32 @@ public class Master extends AbstractLoggingActor {
 		
 		this.reader.tell(new Reader.ReadMessage(), this.self());
 	}
+    
+    private void distributeWork(ActorRef worker) {
+        long start = permutationIndex;
+        long end = permutationIndex + 100;
+        permutationIndex = end;
+        
+        worker.tell(new WorkMessage(start, end), this.self());
+    }
 	
 	protected void handle(BatchMessage message) {
-		
-		///////////////////////////////////////////////////////////////////////////////////////////////////////
-		// The input file is read in batches for two reasons: /////////////////////////////////////////////////
-		// 1. If we distribute the batches early, we might not need to hold the entire input data in memory. //
-		// 2. If we process the batches early, we can achieve latency hiding. /////////////////////////////////
-		// TODO: Implement the processing of the data for the concrete assignment. ////////////////////////////
-		///////////////////////////////////////////////////////////////////////////////////////////////////////
-		
 		if (message.getLines().isEmpty()) {
-			this.collector.tell(new Collector.PrintMessage(), this.self());
-			this.terminate();
-			return;
-		}
-		
-		for (String[] line : message.getLines())
-			System.out.println(Arrays.toString(line));
-		
-		this.collector.tell(new Collector.CollectMessage("Processed batch of size " + message.getLines().size()), this.self());
-		this.reader.tell(new Reader.ReadMessage(), this.self());
+            for (ActorRef worker: workers) {
+                distributeWork(worker);
+            }
+            workBeeingDone = true;
+		} else {
+            for (String[] line : message.getLines()) {
+                int numHints = line.length - 6;
+                for (int i = 0; i < numHints; i++) {
+                    hashsToCrack.add(new HashToCrack(line[i+6], Integer.parseInt(line[0]), i));
+                }
+            }
+
+           // this.collector.tell(new Collector.CollectMessage("Processed batch of size " + message.getLines().size()), this.self());
+            this.reader.tell(new Reader.ReadMessage(), this.self());
+        }
 	}
 	
 	protected void terminate() {
@@ -137,6 +160,11 @@ public class Master extends AbstractLoggingActor {
 	protected void handle(RegistrationMessage message) {
 		this.context().watch(this.sender());
 		this.workers.add(this.sender());
+        
+        if (workBeeingDone) {
+            distributeWork(this.sender());
+        }
+        
 //		this.log().info("Registered {}", this.sender());
 	}
 	

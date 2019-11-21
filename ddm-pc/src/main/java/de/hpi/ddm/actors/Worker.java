@@ -17,6 +17,9 @@ import akka.cluster.Member;
 import akka.cluster.MemberStatus;
 import de.hpi.ddm.MasterSystem;
 
+import de.hpi.ddm.actors.Master.WorkMessage;
+import org.graalvm.compiler.word.Word;
+
 public class Worker extends AbstractLoggingActor {
 
 	////////////////////////
@@ -70,10 +73,15 @@ public class Worker extends AbstractLoggingActor {
 				.match(CurrentClusterState.class, this::handle)
 				.match(MemberUp.class, this::handle)
 				.match(MemberRemoved.class, this::handle)
+                .match(WorkMessage.class, this::handle)
 				.matchAny(object -> this.log().info("Received unknown message: \"{}\"", object.toString()))
 				.build();
 	}
 
+    private void handle(WorkMessage message) {
+        System.out.println("Someone told me to work I don't");
+    }
+    
 	private void handle(CurrentClusterState message) {
 		message.getMembers().forEach(member -> {
 			if (member.status().equals(MemberStatus.up()))

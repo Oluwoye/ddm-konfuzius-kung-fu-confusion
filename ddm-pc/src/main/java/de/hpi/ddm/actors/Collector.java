@@ -30,10 +30,6 @@ public class Collector extends AbstractLoggingActor {
 	public static class CollectMessage implements Serializable {
 		private static final long serialVersionUID = -102767440935270949L;
 		private String result;
-
-		public String getResult() {
-			return result;
-		}
 	}
 
 	@Data
