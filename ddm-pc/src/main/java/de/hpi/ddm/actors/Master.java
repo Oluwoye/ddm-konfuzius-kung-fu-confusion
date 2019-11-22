@@ -225,11 +225,11 @@ public class Master extends AbstractLoggingActor {
 				char[] currentPermutation = subAlphabets.get(0);
 				int[] currentPermutationAsInt = new int[currentPermutation.length];
 				for(int k=0; k<currentPermutation.length; k++){
-					currentPermutationAsInt[k] = currentPermutation[k] - 'A';
+					currentPermutationAsInt[k] = currentPermutation[k];
 				}
 				if(findNextPermutation(currentPermutationAsInt)){
 					for(int k=0; k<currentPermutation.length; k++){
-						currentPermutation[k] = (char) (currentPermutationAsInt[k] + (int) 'A');
+						currentPermutation[k] = (char) (currentPermutationAsInt[k]);
 					}
 					subAlphabets.set(0, currentPermutation);
 				} else {
@@ -261,7 +261,7 @@ public class Master extends AbstractLoggingActor {
 			for (String key : keys) {
 				if(key.equals(hashsToCrack.get(i).getHash())){
 					hashsToCrack.get(i).setSolution(message.getResults().get(key));
-					// System.out.println(hashsToCrack.get(i).getSolution());
+					System.out.println(hashsToCrack.get(i).getSolution());
 				}
 			}
 		}
