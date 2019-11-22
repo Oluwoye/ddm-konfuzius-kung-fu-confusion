@@ -261,7 +261,7 @@ public class Master extends AbstractLoggingActor {
 			for (String key : keys) {
 				if(key.equals(hashsToCrack.get(i).getHash())){
 					hashsToCrack.get(i).setSolution(message.getResults().get(key));
-					System.out.println(hashsToCrack.get(i).getSolution());
+					// System.out.println(hashsToCrack.get(i).getSolution());
 				}
 			}
 		}
