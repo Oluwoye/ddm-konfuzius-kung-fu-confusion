@@ -335,9 +335,11 @@ public class Master extends AbstractLoggingActor {
 				readyWorkers.remove(0);
 				worker.tell(new PassWordCrackMessage(passwordAlphabet, passwordsToCrack.get(currentID - 1), passwordLength,
 						this.self(), currentID), this.self());
-				currentID++;
-			} else {
-				finished = true;
+                if (currentID == passwordsToCrack.size()) {
+                    finished = true;
+                } else {
+                    currentID++;
+                }
 			}
 		}
 	}
