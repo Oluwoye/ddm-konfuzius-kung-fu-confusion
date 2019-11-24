@@ -71,7 +71,7 @@ public class Master extends AbstractLoggingActor {
 	}
     
     @Data @NoArgsConstructor @AllArgsConstructor
-    public class WorkMessage implements Serializable {
+    public static class WorkMessage implements Serializable {
 		private static final long serialVersionUID = 3303081603964723997L;
         
         private ArrayList<String> texts;
