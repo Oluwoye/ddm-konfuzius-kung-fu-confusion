@@ -56,27 +56,26 @@ public class SparkMain {
                 data.addAll(file_data_tuple);
                 fileHeaders.addAll(file_header);
                 numberOfColumns += file_header.size();
-                System.out.println("Hello");
             }
         }
         JavaRDD<Tuple2<Integer, String[]>> full_rdds = sparkContext.parallelize(data);
         JavaPairRDD<String, BitSet> valuesAsKey = JavaPairRDD.fromJavaRDD(full_rdds.flatMap(x -> {
         	int len = x._2.length;
-        	ArrayList<Tuple2<String, BitSet>> result = new ArrayList<Tuple2<String, BitSet>>(len);
+        	ArrayList<Tuple2<String, BitSet>> result = new ArrayList<>();
         	for (int i = 0; i < len; i++) {
         		BitSet j = new BitSet(numberOfColumns);
         		j.clear();
         		j.set(x._1 + i, true);
         		Tuple2<String, BitSet> r = new Tuple2<String, BitSet>(x._2[i], j);
-        		result.set(i, r);
+        		result.add(r);
         	}
         	return result.iterator();
         }));
-        JavaPairRDD<String, BitSet> v = valuesAsKey.reduceByKey((a, x) -> { a.and(x); return a; }); 
+        JavaPairRDD<String, BitSet> v = valuesAsKey.reduceByKey((a, x) -> {a.and(x); return a; });
         JavaPairRDD<BitSet, Integer> w = JavaPairRDD.fromJavaRDD(JavaRDD.fromRDD(JavaPairRDD.toRDD(v), v.classTag()).flatMap(x -> {
         	Tuple2<BitSet, Integer> r = new Tuple2<BitSet, Integer>(x._2, 0);
-        	ArrayList<Tuple2<BitSet, Integer>> s = new ArrayList<Tuple2<BitSet, Integer>>(1);
-        	s.set(0,r);
+        	ArrayList<Tuple2<BitSet, Integer>> s = new ArrayList<Tuple2<BitSet, Integer>>();
+        	s.add(r);
         	return s.iterator();
         })).reduceByKey((a, b) -> 0);
         JavaRDD<BitSet> w2 = JavaRDD.fromRDD(JavaPairRDD.toRDD(w), w.classTag()).map(x -> x._1);
@@ -84,10 +83,10 @@ public class SparkMain {
         	BitSet[] result = new BitSet[numberOfColumns];
         	for (int i = 0; i < numberOfColumns; i++) {
         		result[i] = new BitSet(numberOfColumns);
-        		result[i].clear();
+                result[i].set(0, numberOfColumns);;
         		for (int j = 0; j < numberOfColumns; j++) {
         			if (includeX.get(i) && !includeX.get(j)) {
-        				result[i].set(j, true);
+        				result[i].set(j, false);
         			}
         		}
         	}
@@ -96,26 +95,29 @@ public class SparkMain {
         
         BitSet[] resultMatrix = matrixes.reduce((a, b) -> {
         	for (int i = 0; i < numberOfColumns; i++) {
-        		a[i].and(b[i]);
+                a[i].and(b[i]);
         	}
         	return a;
         });
         
         assert(resultMatrix.length == numberOfColumns);
-        String[] output = new String[numberOfColumns];
+        ArrayList<String> output = new ArrayList<>();
+        for (int i=0; i<numberOfColumns; i++){
+            output.add("");
+        }
     	for (int i = 0; i < numberOfColumns; i++) {
     		for (int j = 0; j < numberOfColumns; j++) {
     			if (i != j && resultMatrix[i].get(j)) {
-    				if (output[i].length() > 0) {
-    					output[i] += ", ";
+    				if (output.get(j).length() > 0) {
+    					output.set(j, output.get(j) + ", ");
     				}
-    				output[j] += fileHeaders.get(i);
+    				output.set(j, output.get(j) + fileHeaders.get(i));
     			}
     		}
     	}
     	for (int i = 0; i < numberOfColumns; i++) {
-    		if (output[i].length() > 0) {
-    			System.out.println(fileHeaders.get(i) + " < " + output[i]);
+    		if (output.get(i).length() > 0) {
+    			System.out.println(fileHeaders.get(i) + " < " + output.get(i));
     		}
     	}
     }
