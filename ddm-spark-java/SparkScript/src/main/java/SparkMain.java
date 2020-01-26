@@ -3,8 +3,10 @@ import org.apache.spark.SparkConf;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -12,20 +14,6 @@ import scala.Tuple2;
 
 public class SparkMain {
     private static Integer numberOfColumns = 0;
-
-    public void matrix_and(ArrayList<ArrayList<Boolean>> x, ArrayList<ArrayList<Boolean>> y){
-        //Java passes non-basic data by reference rather than value compared to python, so working on x here is better.
-        for(int i=0; i< x.size(); i++){
-            for(int j=0; j < x.get(i).size(); j++){
-                Boolean x_value = x.get(i).get(j);
-                x.get(i).set(j, x_value && y.get(i).get(j));
-            }
-        }
-    }
-
-    public int sum_func(int accum, int n){
-        return accum + n;
-    }
 
     public static void main(String[] args) {
         String path = "TPCH";
@@ -72,5 +60,63 @@ public class SparkMain {
             }
         }
         JavaRDD<Tuple2<Integer, String[]>> full_rdds = sparkContext.parallelize(data);
+        JavaPairRDD<String, BitSet> valuesAsKey = JavaPairRDD.fromJavaRDD(full_rdds.flatMap(x -> {
+        	int len = x._2.length;
+        	ArrayList<Tuple2<String, BitSet>> result = new ArrayList<Tuple2<String, BitSet>>(len);
+        	for (int i = 0; i < len; i++) {
+        		BitSet j = new BitSet(numberOfColumns);
+        		j.clear();
+        		j.set(x._1 + i, true);
+        		Tuple2<String, BitSet> r = new Tuple2<String, BitSet>(x._2[i], j);
+        		result.set(i, r);
+        	}
+        	return result.iterator();
+        }));
+        JavaPairRDD<String, BitSet> v = valuesAsKey.reduceByKey((a, x) -> { a.and(x); return a; }); 
+        JavaPairRDD<BitSet, Integer> w = JavaPairRDD.fromJavaRDD(JavaRDD.fromRDD(JavaPairRDD.toRDD(v), v.classTag()).flatMap(x -> {
+        	Tuple2<BitSet, Integer> r = new Tuple2<BitSet, Integer>(x._2, 0);
+        	ArrayList<Tuple2<BitSet, Integer>> s = new ArrayList<Tuple2<BitSet, Integer>>(1);
+        	s.set(0,r);
+        	return s.iterator();
+        })).reduceByKey((a, b) -> 0);
+        JavaRDD<BitSet> w2 = JavaRDD.fromRDD(JavaPairRDD.toRDD(w), w.classTag()).map(x -> x._1);
+        JavaRDD<BitSet[]> matrixes = w2.map(includeX -> {
+        	BitSet[] result = new BitSet[numberOfColumns];
+        	for (int i = 0; i < numberOfColumns; i++) {
+        		result[i] = new BitSet(numberOfColumns);
+        		result[i].clear();
+        		for (int j = 0; j < numberOfColumns; j++) {
+        			if (includeX.get(i) && !includeX.get(j)) {
+        				result[i].set(j, true);
+        			}
+        		}
+        	}
+        	return result;
+        });
+        
+        BitSet[] resultMatrix = matrixes.reduce((a, b) -> {
+        	for (int i = 0; i < numberOfColumns; i++) {
+        		a[i].and(b[i]);
+        	}
+        	return a;
+        });
+        
+        assert(resultMatrix.length == numberOfColumns);
+        String[] output = new String[numberOfColumns];
+    	for (int i = 0; i < numberOfColumns; i++) {
+    		for (int j = 0; j < numberOfColumns; j++) {
+    			if (i != j && resultMatrix[i].get(j)) {
+    				if (output[i].length() > 0) {
+    					output[i] += ", ";
+    				}
+    				output[j] += fileHeaders.get(i);
+    			}
+    		}
+    	}
+    	for (int i = 0; i < numberOfColumns; i++) {
+    		if (output[i].length() > 0) {
+    			System.out.println(fileHeaders.get(i) + " < " + output[i]);
+    		}
+    	}
     }
 }
